@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zarządzanie flotą pojazdów</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            width: calc(100% - 20px);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .export-button {
+            background-color: #007bff;
+            margin-left: 10px;
+        }
+        .export-button:hover {
+            background-color: #0069d9;
+        }
+        .delete-button {
+            background-color: #dc3545;
+        }
+        .delete-button:hover {
+            background-color: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="appContainer" style="display:none;">
+        <div class="logo">
+            <img src="logo.png" alt="Logo Firmy" style="max-width: 100px;">
+        </div>
+        <h1>Zarządzanie flotą pojazdów</h1>
+        <form id="vehicleForm">
+            <div class="form-group">
+                <label for="vehicleName">Nazwa pojazdu</label>
+                <input type="text" id="vehicleName" required>
+            </div>
+            <div class="form-group">
+                <label for="vehicleModel">Model pojazdu</label>
+                <input type="text" id="vehicleModel" required>
+            </div>
+            <div class="form-group">
+                <label for="registration">Rejestracja</label>
+                <input type="text" id="registration" required>
+            </div>
+            <div class="form-group">
+                <label for="driver">Najczęstszy kierowca</label>
+                <input type="text" id="driver" required>
+            </div>
+            <div class="form-group">
+                <label for="acExpiry">Data końca AC</label>
+                <input type="date" id="acExpiry" required>
+            </div>
+            <div class="form-group">
+                <label for="ocExpiry">Data końca OC</label>
+                <input type="date" id="ocExpiry" required>
+            </div>
+            <div class="form-group">
+                <label for="insuranceExpiry">Data końca ubezpieczenia</label>
+                <input type="date" id="insuranceExpiry" required>
+            </div>
+            <button type="submit">Dodaj pojazd</button>
+            <button type="button" onclick="exportToPDF()" class="export-button">Eksportuj do PDF</button>
+        </form>
+        <table id="vehicleTable">
+            <thead>
+                <tr>
+                    <th>Nazwa</th>
+                    <th>Model</th>
+                    <th>Rejestracja</th>
+                    <th>Kierowca</th>
+                    <th>AC (dni do końca)</th>
+                    <th>OC (dni do końca)</th>
+                    <th>Ubezpieczenie (dni do końca)</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script>
+        const { jsPDF } = window.jspdf;
+        const vehicleForm = document.getElementById('vehicleForm');
+        const vehicleTableBody = document.getElementById('vehicleTable').querySelector('tbody');
+        const appContainer = document.getElementById('appContainer');
+        const password = "11223344";
+
+        // Funkcja logowania
+        function login() {
+            const inputPassword = prompt("Wprowadź hasło:");
+            if (inputPassword === password) {
+                appContainer.style.display = 'block'; // Pokaż aplikację
+                displayVehicles(); // Wyświetl samochody po zalogowaniu
+            } else {
+                alert("Nieprawidłowe hasło. Spróbuj ponownie.");
+                login(); // Powtórz logowanie w przypadku błędu
+            }
+        }
+
+        let vehicles = JSON.parse(localStorage.getItem('vehicles')) || [];
+
+        vehicleForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const vehicle = {
+                name: vehicleForm.vehicleName.value,
+                model: vehicleForm.vehicleModel.value,
+                registration: vehicleForm.registration.value,
+                driver: vehicleForm.driver.value,
+                acExpiry: new Date(vehicleForm.acExpiry.value),
+                ocExpiry: new Date(vehicleForm.ocExpiry.value),
+                insuranceExpiry: new Date(vehicleForm.insuranceExpiry.value),
+            };
+            vehicles.push(vehicle);
+            localStorage.setItem('vehicles', JSON.stringify(vehicles));
+            displayVehicles();
+            vehicleForm.reset();
+        });
+
+        function displayVehicles() {
+            vehicleTableBody.innerHTML = '';
+            vehicles.forEach((vehicle, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${vehicle.name}</td>
+                    <td>${vehicle.model}</td>
+                    <td>${vehicle.registration}</td>
+                    <td>${vehicle.driver}</td>
+                    <td>${Math.ceil((vehicle.acExpiry - new Date()) / (1000 * 60 * 60 * 24))}</td>
+                    <td>${Math.ceil((vehicle.ocExpiry - new Date()) / (1000 * 60 * 60 * 24))}</td>
+                    <td>${Math.ceil((vehicle.insuranceExpiry - new Date()) / (1000 * 60 * 60 * 24))}</td>
+                    <td>
+                        <button onclick="editVehicle(${index})">Edytuj</button>
+                        <button onclick="deleteVehicle(${index})" class="delete-button">Usuń</button>
+                    </td>
+                `;
+                vehicleTableBody.appendChild(tr);
+            });
+        }
+
+        function editVehicle(index) {
+            const vehicle = vehicles[index];
+            vehicleForm.vehicleName.value = vehicle.name;
+            vehicleForm.vehicleModel.value = vehicle.model;
+            vehicleForm.registration.value = vehicle.registration;
+            vehicleForm.driver.value = vehicle.driver;
+            vehicleForm.acExpiry.value = vehicle.acExpiry.toISOString().split('T')[0];
+            vehicleForm.ocExpiry.value = vehicle.ocExpiry.toISOString().split('T')[0];
+            vehicleForm.insuranceExpiry.value = vehicle.insuranceExpiry.toISOString().split('T')[0];
+
+            vehicles.splice(index, 1); // Usuń pojazd z listy w celu dodania go ponownie
+            localStorage.setItem('vehicles', JSON.stringify(vehicles));
+            displayVehicles();
+        }
+
+        function deleteVehicle(index) {
+            if (confirm("Czy na pewno chcesz usunąć ten pojazd?")) {
+                vehicles.splice(index, 1); // Usunięcie pojazdu z listy
+                localStorage.setItem('vehicles', JSON.stringify(vehicles)); // Zaktualizowanie localStorage
+                displayVehicles(); // Wyświetlenie zaktualizowanej tabeli
+            }
+        }
+
+        function exportToPDF() {
+            const doc = new jsPDF();
+            doc.text("Zarządzanie flotą pojazdów", 14, 16);
+            doc.setFontSize(10);
+            const headers = [["Nazwa", "Model", "Rejestracja", "Kierowca", "AC (dni do końca)", "OC (dni do końca)", "Ubezpieczenie (dni do końca)"]];
+            const data = vehicles.map(vehicle => [
+                vehicle.name,
+                vehicle.model,
+                vehicle.registration,
+                vehicle.driver,
+                Math.ceil((vehicle.acExpiry - new Date()) / (1000 * 60 * 60 * 24)),
+                Math.ceil((vehicle.ocExpiry - new Date()) / (1000 * 60 * 60 * 24)),
+                Math.ceil((vehicle.insuranceExpiry - new Date()) / (1000 * 60 * 60 * 24)),
+            ]);
+
+            // Użycie autoTable do generowania tabeli w PDF
+            doc.autoTable({
+                head: headers,
+                body: data,
+                startY: 30, // Zaczyna na Y=30
+                theme: 'grid' // Wybrany motyw
+            });
+
+            doc.save("flota_pojazdów.pdf"); // Zapisuje dokument
+        }
+
+        // Wywołanie funkcji logowania przy załadowaniu strony
+        window.onload = function() {
+            login();
+        };
+    </script>
+</body>
+</html>
+
